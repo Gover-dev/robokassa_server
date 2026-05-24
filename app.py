@@ -9,10 +9,10 @@ MERCHANT_LOGIN      = os.environ.get("MERCHANT_LOGIN",      "GCore_project")
 MERCHANT_PASSWORD_1 = os.environ.get("MERCHANT_PASSWORD_1", "Rl5vaXHuKxg9M12s0QJX")
 MERCHANT_PASSWORD_2 = os.environ.get("MERCHANT_PASSWORD_2", "Ypuoa136zNSyCg3VseA1")
 
-DB_HOST = os.environ.get("DB_HOST", "127.0.0.1")
-DB_USER = os.environ.get("DB_USER", "root")
-DB_PASS = os.environ.get("DB_PASS", "")
-DB_NAME = os.environ.get("DB_NAME", "flamerp")
+DB_HOST = os.environ.get("DB_HOST", "clustdb2.masspas.com")
+DB_USER = os.environ.get("DB_USER", "u4717_WlSZyh1Kpa")
+DB_PASS = os.environ.get("DB_PASS", "e7jUq^u9A@SStK3mLVMid!ft")
+DB_NAME = os.environ.get("DB_NAME", "s4717_flamerp")
 DB_PORT = int(os.environ.get("DB_PORT", "3306"))
 
 
