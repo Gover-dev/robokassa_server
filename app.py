@@ -5,25 +5,22 @@ from flask import Flask, request
 
 app = Flask(__name__)
 
-# ============================
-# НАСТРОЙКИ
-# ============================
 MERCHANT_LOGIN      = os.environ.get("MERCHANT_LOGIN",      "GCore_project")
 MERCHANT_PASSWORD_1 = os.environ.get("MERCHANT_PASSWORD_1", "IXFZ06zYljf6OCmWr2s8")
 MERCHANT_PASSWORD_2 = os.environ.get("MERCHANT_PASSWORD_2", "nF0th2bL5vveQs5nlL1q")
 
-DB_HOST = os.environ.get("DB_HOST", "IP_ИГРОВОГО_СЕРВЕРА")
+DB_HOST = os.environ.get("DB_HOST", "127.0.0.1")
 DB_USER = os.environ.get("DB_USER", "root")
 DB_PASS = os.environ.get("DB_PASS", "")
 DB_NAME = os.environ.get("DB_NAME", "flamerp")
-DB_PORT = int(os.environ.get("DB_PORT", 3306))
-# ============================
+DB_PORT = int(os.environ.get("DB_PORT", "3306"))
 
 
 def get_db():
     return pymysql.connect(
         host=DB_HOST, user=DB_USER, password=DB_PASS,
-        database=DB_NAME, port=DB_PORT, charset="utf8"
+        database=DB_NAME, port=DB_PORT, charset="utf8",
+        connect_timeout=5
     )
 
 
@@ -31,35 +28,43 @@ def calculate_signature(*args) -> str:
     return hashlib.md5(":".join(str(a) for a in args).encode()).hexdigest()
 
 
+@app.route("/")
+def index():
+    return "FlameRP Donate — OK", 200
+
+
 @app.route("/robokassa/result", methods=["POST", "GET"])
 def result_url():
     params    = request.values
     out_sum   = params.get("OutSum", "")
-    inv_id    = params.get("InvId", "")      # числовой ID заказа
+    inv_id    = params.get("InvId", "")
     signature = params.get("SignatureValue", "")
 
-    # Проверка подписи (Password2 для ResultURL)
+    print(f"[Robokassa] ResultURL hit: OutSum={out_sum} InvId={inv_id} Sig={signature}")
+
+    # Проверка подписи
     expected = calculate_signature(out_sum, inv_id, MERCHANT_PASSWORD_2)
     if expected.lower() != signature.lower():
-        print(f"[Robokassa] Неверная подпись! Ожидали {expected}, получили {signature}")
+        print(f"[Robokassa] BAD SIGN: expected={expected} got={signature}")
         return "bad sign", 400
 
-    # Ищем steamid и fc_amount в таблице fl_robokassa_orders по inv_id
     try:
         db = get_db()
         with db.cursor(pymysql.cursors.DictCursor) as cur:
-            cur.execute("SELECT steamid, fc_amount FROM fl_robokassa_orders WHERE inv_id = %s", (inv_id,))
+            cur.execute(
+                "SELECT steamid, fc_amount FROM fl_robokassa_orders WHERE inv_id = %s",
+                (inv_id,)
+            )
             row = cur.fetchone()
 
         if not row:
-            print(f"[Robokassa] Заказ не найден: inv_id={inv_id}")
+            print(f"[Robokassa] Order not found: inv_id={inv_id}")
             db.close()
             return "order not found", 404
 
         steamid64 = row["steamid"]
         fc_amount = int(row["fc_amount"])
 
-        # Добавляем в очередь начислений
         with db.cursor() as cur:
             cur.execute(
                 "INSERT INTO fl_donate_queue (steamid, amount, processed) VALUES (%s, %s, 0)",
@@ -68,52 +73,40 @@ def result_url():
         db.commit()
         db.close()
 
-        print(f"[Robokassa] ✅ Зачислено {fc_amount} FC → {steamid64} (InvId={inv_id})")
+        print(f"[Robokassa] OK: {fc_amount} FC -> {steamid64}")
 
     except Exception as e:
-        print(f"[Robokassa] ❌ Ошибка MySQL: {e}")
-        return "db error", 500
+        print(f"[Robokassa] DB ERROR: {e}")
+        return f"db error: {e}", 500
 
-    # Обязательный ответ для Robokassa — именно так, без лишнего
     return f"OK{inv_id}"
 
 
-@app.route("/robokassa/success", methods=["GET"])
+@app.route("/robokassa/success")
 def success_url():
-    return """
-    <html><head><meta charset="utf-8"><title>Оплата прошла!</title>
-    <style>body{font-family:Arial;background:#1a1a2e;color:#eee;
-    display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
+    return """<html><head><meta charset="utf-8"><title>Оплата прошла!</title>
+    <style>body{font-family:Arial;background:#1a1a2e;color:#eee;display:flex;
+    align-items:center;justify-content:center;height:100vh;margin:0}
     .box{background:#16213e;border-radius:12px;padding:40px;text-align:center}
-    h1{color:#4caf50}.note{color:#aaa;margin-top:16px}</style></head>
-    <body><div class="box">
-    <h1>✅ Оплата прошла успешно!</h1>
+    h1{color:#4caf50}</style></head><body><div class="box">
+    <h1>✅ Оплата прошла!</h1>
     <p>FC будут начислены в течение 30 секунд.</p>
-    <p class="note">Вернитесь в игру!</p>
-    </div></body></html>
-    """
+    <p style="color:#aaa">Вернитесь в игру!</p>
+    </div></body></html>"""
 
 
-@app.route("/robokassa/fail", methods=["GET"])
+@app.route("/robokassa/fail")
 def fail_url():
-    return """
-    <html><head><meta charset="utf-8"><title>Оплата отменена</title>
-    <style>body{font-family:Arial;background:#1a1a2e;color:#eee;
-    display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
+    return """<html><head><meta charset="utf-8"><title>Отменено</title>
+    <style>body{font-family:Arial;background:#1a1a2e;color:#eee;display:flex;
+    align-items:center;justify-content:center;height:100vh;margin:0}
     .box{background:#16213e;border-radius:12px;padding:40px;text-align:center}
-    h1{color:#e94560}</style></head>
-    <body><div class="box">
+    h1{color:#e94560}</style></head><body><div class="box">
     <h1>❌ Оплата отменена</h1>
     <p>Попробуйте снова командой <b>!donate</b> в игре.</p>
-    </div></body></html>
-    """
-
-
-@app.route("/")
-def index():
-    return "FlameRP Donate — OK", 200
+    </div></body></html>"""
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
