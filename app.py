@@ -6,8 +6,8 @@ from flask import Flask, request
 app = Flask(__name__)
 
 MERCHANT_LOGIN      = os.environ.get("MERCHANT_LOGIN",      "GCore_project")
-MERCHANT_PASSWORD_1 = os.environ.get("MERCHANT_PASSWORD_1", "IXFZ06zYljf6OCmWr2s8")
-MERCHANT_PASSWORD_2 = os.environ.get("MERCHANT_PASSWORD_2", "nF0th2bL5vveQs5nlL1q")
+MERCHANT_PASSWORD_1 = os.environ.get("MERCHANT_PASSWORD_1", "Rl5vaXHuKxg9M12s0QJX")
+MERCHANT_PASSWORD_2 = os.environ.get("MERCHANT_PASSWORD_2", "Ypuoa136zNSyCg3VseA1")
 
 DB_HOST = os.environ.get("DB_HOST", "127.0.0.1")
 DB_USER = os.environ.get("DB_USER", "root")
